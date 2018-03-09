@@ -1,11 +1,28 @@
 var FTP = require('../');
-var client = new FTP({host: 'localhost', port: 21, user: 'anonymous', password: 'anonymous@', active: false});
+var client = new FTP({host: 'localhost', active: false, debug: true});
 client.connect(function (err) {
-	console.info('connected');
-	client.get('5541-Saarbrücken-1-20180305-173631.bor', 'C:\\daten\\5541-Saarbrücken-1-20180305-173631.bor', function (err) {
-		console.info(err, 'done')
-	});
+	var get_file = function () {
+		setTimeout(function () {
+			client.get('5541-Saarbrücken-1-20180305-173631.bor', 'C:\\daten\\5541-Saarbrücken-1-20180305-173631.bor', function (err) {
+				console.info(err, 'done');
+				put_file();
+			});
+		}, 1000);
+	};
+
+	var put_file = function () {
+		setTimeout(function () {
+			client.put('C:\\daten\\5541-Saarbrücken-1-20180305-173631.bor', '5541-Saarbrücken-1-20180305-173631.bor', function (err) {
+				console.info(err, 'done');
+				console.info(process.memoryUsage().heapUsed / 1024 / 1024);
+				get_file();
+			});
+		}, 1000);
+	};
+	
+	put_file();
 });
+
 //client.on('ready', function () {
 //	console.info('Ready');
 /*	client.feat(function (data) {

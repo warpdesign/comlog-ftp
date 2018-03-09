@@ -91,6 +91,9 @@ function FTP(settings) {
 		this.Socket.end(null, function(){});
 	});
 
+	// Login fail
+	this.on('530', function (chunc) { this.emit('error', new Error(chunc)); });
+
 	this.on('data', function (chunk) {
 		if (this.debug) console.log(chunk);
 		var code = chunk.substring(0,3);
@@ -173,14 +176,9 @@ function FTP(settings) {
 	 * @param {Function} cb Callback function
 	 */
 	this.getDataSocket = function (cb) {
+		var cb_once = function (err, sock) { if (cb) { cb(err, sock); cb = null; } };
 		if (this.active) {
 			var server;
-			var cb_once = function (err, sock) {
-				if (cb) {
-					cb(err, sock);
-					cb = null;
-				}
-			};
 
 			var queue = new FunctionQueue();
 			server = net.createServer(function(socket){
@@ -251,18 +249,18 @@ function FTP(settings) {
 						delete _this.DataSocket;
 					});
 					_this.DataSocket.once('connect', function (data) {
-						cb(null, _this.DataSocket);
+						cb_once(null, _this.DataSocket);
 					});
 					_this.DataSocket.once('error', function (err) {
 						var e = new Error("Can't open passiv connenction:"+err.message);
 						_this.emit('error', e);
-						cb(e, null);
+						cb_once(e, null);
 					});
 				}
 				else {
 					var err = new Error("Can't open passiv connenction:"+res);
 					_this.emit(err);
-					cb(err, null);
+					cb_once(err, null);
 				}
 			});
 		}
@@ -292,25 +290,27 @@ function FTP(settings) {
 		if (typeof dir == "function") {
 			cb = dir; dir = '';
 		}
+		var cb_once = function (err, sock) { if (cb) { cb(err, sock); cb = null; } };
 		this.getDataSocket(function (serr, psock) {
 			if (psock) {
 				psock.setEncoding(_this.encoding);
 				var data = '';
-				var error = null;
 				psock.on('data', function (d) {
 					data += d;
 				});
 				psock.on('error', function (e) {
-					error = e;
+					cb_once(e);
 				});
 				psock.on('close', function () {
-					ListingParser.parseFtpEntries(data, function(parseErr, files) {
-						cb(error || parseErr, files, data);
+					_this.once('226', function () {
+						ListingParser.parseFtpEntries(data, function(parseErr, files) {
+							cb(parseErr, files, data);
+						});
 					});
 				});
 				_this.write('LIST '+(dir || ''));
 			}
-			else cb(serr);
+			else cb_once(serr);
 		});
 	};
 
@@ -324,54 +324,51 @@ function FTP(settings) {
 		if (typeof dst == 'function') {
 			cb = dst; dst = null;
 		}
+		var cb_once = function (err, sock) { if (cb) { cb(err, sock); cb = null; } };
 		this.getDataSocket(function (serr, psock) {
 			if (psock) {
-				var error = null;
 				psock.setEncoding(_this.encoding);
-				if (dst) {
-					var writeStream;
-					psock.on('error', function (err) {
-						error = err;
-					});
-
-					psock.on('readable', function () {
-
-					});
-
-					psock.on('data', function (d) {
-						if (!writeStream) {
-							writeStream = fs.createWriteStream(dst, {encoding: _this.encoding});
-							writeStream.on("error", function (err) {
-								error = err;
-							});
-						}
-
-						writeStream.write(d);
-					});
-
-					psock.on('close', function () {
-						if (writeStream) writeStream.end();
-						if (cb) {
-							cb(error);
-							cb = null;
-						}
-					});
-					//psock.pipe(writeStream);
-				}
-
 
 				_this.raw('RETR',src, function (res) {
-					if (res.substr(0, 3) == '550') {
-						if (cb) {
-							cb(new Error(res));
-							cb = null;
-						}
-					} else if(!dst) {
-						cb(null, psock);
+					if ((['150', '125']).indexOf(res.substr(0, 3)) == -1) {
+						cb_once(new Error(res));
+					}
+					else if(!dst) {
+						cb_once(null, psock);
+					}
+					else {
+						var writeStream = fs.createWriteStream(dst, {encoding: _this.encoding});
+
+						psock.on('error', function (err) {
+							cb_once(err);
+						});
+
+						writeStream.on('error', function (err) {
+							cb_once(err);
+						});
+
+						/*psock.on('data', function (d) {
+							if (!writeStream) {
+								writeStream = fs.createWriteStream(dst, {encoding: _this.encoding});
+								writeStream.on("error", function (err) {
+									error = err;
+								});
+							}
+
+							writeStream.write(d);
+						});*/
+
+						psock.on('close', function () {
+							writeStream.end();
+						});
+						_this.once('226', function () {
+							cb_once(null);
+						});
+						psock.pipe(writeStream);
 					}
 				});
 			}
-			else cb(serr);
+			else cb_once(serr);
 		});
 	};
 
@@ -382,12 +379,13 @@ function FTP(settings) {
 	 * @param {Function} cb Callback function
 	 */
 	this.put = function (src, dst, cb) {
+		var cb_once = function (err, sock) { if (cb) { cb(err, sock); cb = null; } };
 		var readStream;
 		if (src instanceof stream.Readable) readStream = src;
 		else readStream = fs.createReadStream(src, {encoding: _this.encoding});
 
 		readStream.on('error', function (e) {
-			cb(e);
+			cb_once(e);
 			readStream.destroy();
 		});
 		readStream.on('readable', function () {
@@ -397,38 +395,28 @@ function FTP(settings) {
 					psock.setEncoding(_this.encoding);
 
 					psock.on('error', function (err) {
-						error = err;
-						readStream.end();
-					});
-
-					readStream.on('end', function () {
-						//psock.end();
 						readStream.close();
-						readStream.destroy();
+						cb_once(err);
 					});
 
 					psock.on('close', function () {
-						if (cb) {
-							cb(error);
-							cb = null;
-						}
+						_this.once('226', function (res) {
+							cb_once(error);
+						})
 					});
 
 					_this.raw('STOR',dst, function (res) {
-						if (res.substr(0, 3) == '550') {
-							if (cb) {
-								readStream.close();
-								psock.destroy();
-								cb(new Error(res));
-								cb = null;
-							}
+						if ((['125', '150']).indexOf(res.substr(0, 3)) == -1) {
+							readStream.close();
+							psock.destroy();
+							cb_once(new Error(res));
 						}
 						else {
 							readStream.pipe(psock);
 						}
 					});
 				}
-				else cb(serr);
+				else cb_once(serr);
 			});
 		});
 	};
