@@ -79,7 +79,6 @@ conn.connect();
  - connect( callback ) void
  - write( command, [callback] ) void
  - raw( command, [args], callback ) void
- - pasv( callback ) void
  - feat( callback ) void
  - list( callback ) void
  - get( removeFilePath, [localFilePath], callback ) void
