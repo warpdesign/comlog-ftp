@@ -2,7 +2,7 @@ var FTP = require('../');
 var client = new FTP({host: 'localhost', port: 21, user: 'anonymous', password: 'anonymous@', active: false});
 client.connect(function (err) {
 	console.info('connected');
-	client.get('file.txt', 'C:\\daten\\file.txt', function (err) {
+	client.get('5541-Saarbrücken-1-20180305-173631.bor', 'C:\\daten\\5541-Saarbrücken-1-20180305-173631.bor', function (err) {
 		console.info(err, 'done')
 	});
 });

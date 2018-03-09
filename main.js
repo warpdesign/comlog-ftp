@@ -47,7 +47,7 @@ function FTP(settings) {
 	this.encoding = 'binary';
 	this.type = 'I';
 	this.Socket = null;
-	this.debug = true;
+	this.debug = false;
 
 	this.DataSocket = null;
 
