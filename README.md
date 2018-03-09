@@ -93,9 +93,6 @@ conn.connect();
  - stat( callback ) void
  - destroy() void
 
-## TODO
- - Active FTP Support
-
 ## License
 
 ISC © [COMLOG GmbH](http://www.comlog.org)

@@ -6,6 +6,28 @@ const fs = require("fs");
 const stream = require("stream");
 
 var PASV_REG = /([-\d]+,[-\d]+,[-\d]+,[-\d]+),([-\d]+),([-\d]+)/;
+var FunctionQueue = function() {
+	this.queue = [];
+	this.add = function (type, args) {
+		var item = {args: [], type: type};
+		for(var i=0; i < args.length; i++) item.args.push(args[i]);
+		this.queue.push(item);
+	};
+	this.on = function (e) { this.add('on', arguments); };
+	this.once = function (e) { this.add('once', arguments); };
+	this.setEncoding = function (e) { this.add('setEncoding', arguments); };
+	this.destroy = function () {};
+	this.apply = function (socket) {
+		while (this.queue.length > 0) {
+			var item = this.queue.shift();
+			socket[item.type].apply(socket, item.args);
+		}
+		this.prototype = socket.prototype;
+		for(var i in socket) {
+			this[i] = socket[i];
+		}
+	}
+};
 
 /**
  * @param settings
@@ -26,6 +48,8 @@ function FTP(settings) {
 	this.type = 'I';
 	this.Socket = null;
 	this.debug = true;
+
+	this.DataSocket = null;
 
 	var _bindEvents = function () {
 		var eventList = ['connect', 'data', 'end', 'close', 'error'];
@@ -148,35 +172,100 @@ function FTP(settings) {
 	 * Get passiv socket
 	 * @param {Function} cb Callback function
 	 */
-	this.pasv = function (cb) {
-		this.raw('PASV', function(res) {
-			var match = (res+'').match(PASV_REG);
-			if (match) {
-				var host = match[1].split(',').join("."),
-					port  = (parseInt(match[2], 10) & 255) * 256 + (parseInt(match[3], 10) & 255);
+	this.getDataSocket = function (cb) {
+		if (this.active) {
+			var server;
+			var cb_once = function (err, sock) {
+				if (cb) {
+					cb(err, sock);
+					cb = null;
+				}
+			};
 
-				if (host === "127.0.0.1") host = _this.host;
-				_this.PassivSocket = _this.createSocket(host, port);
-				_this.PassivSocket.setTimeout(_this.timeout);
-				_this.PassivSocket.once("close", function() {
-					_this.PassivSocket.destroy();
-					delete _this.PassivSocket;
+			var queue = new FunctionQueue();
+			server = net.createServer(function(socket){
+				if (_this.debug) console.log('Incomming active connection');
+				_this.DataSocket = socket;
+
+				socket.setKeepAlive(true, 5000);
+
+				socket.on('connect', function(){
+					if (_this.debug) console.log('Active socket connected');
 				});
-				_this.PassivSocket.once('connect', function (data) {
-					cb(null, _this.PassivSocket);
+
+				socket.on('data', function(d){
+					if (_this.debug) console.log('Active socket data: ' + d);
 				});
-				_this.PassivSocket.once('error', function (err) {
-					var e = new Error("Can't open passiv connenction:"+err.message);
-					_this.emit('error', e);
-					cb(e, null);
+
+				socket.on('error', function(err){
+					if (_this.debug) console.log('Active socket error: ' + err);
 				});
-			}
-			else {
-				var err = new Error("Can't open passiv connenction:"+res);
-				_this.emit(err);
-				cb(err, null);
-			}
-		});
+
+				socket.on('end', function() {
+					if (_this.debug) console.log('Active socket ended');
+				});
+
+				socket.on('close', function() {
+					if (_this.debug) console.log('Active socket closed');
+					_this.DataSocket = null;
+					server.close();
+					server = null;
+				});
+
+				queue.apply(_this.DataSocket);
+			});
+
+			server.on('error', function(e){
+				cb_once(e, null);
+			});
+
+			server.on('close', function(){
+				cb_once(new Error('Aktive server closed'), null);
+			});
+
+			server.listen(function(){
+				if (_this.debug) console.log('Active server started');
+				var address = server.address();
+				var port = address.port;
+				var p1 = Math.floor(port/256);
+				var p2 = port % 256;
+
+				_this.raw('PORT','127,0,0,1,' + p1 + ',' + p2, function(res) {
+					if (res.substr(0, 3) != '200') return cb_once(new Error(res), null);
+					cb_once(null, queue);
+				});
+			});
+		}
+		else {
+			this.raw('PASV', function(res) {
+				var match = (res+'').match(PASV_REG);
+				if (match) {
+					var host = match[1].split(',').join("."),
+						port  = (parseInt(match[2], 10) & 255) * 256 + (parseInt(match[3], 10) & 255);
+
+					if (host === "127.0.0.1") host = _this.host;
+					_this.DataSocket = _this.createSocket(host, port);
+					_this.DataSocket.setTimeout(_this.timeout);
+					_this.DataSocket.once("close", function() {
+						_this.DataSocket.destroy();
+						delete _this.DataSocket;
+					});
+					_this.DataSocket.once('connect', function (data) {
+						cb(null, _this.DataSocket);
+					});
+					_this.DataSocket.once('error', function (err) {
+						var e = new Error("Can't open passiv connenction:"+err.message);
+						_this.emit('error', e);
+						cb(e, null);
+					});
+				}
+				else {
+					var err = new Error("Can't open passiv connenction:"+res);
+					_this.emit(err);
+					cb(err, null);
+				}
+			});
+		}
 	};
 
 	/**
@@ -203,9 +292,9 @@ function FTP(settings) {
 		if (typeof dir == "function") {
 			cb = dir; dir = '';
 		}
-		this.pasv(function (serr, psock) {
+		this.getDataSocket(function (serr, psock) {
 			if (psock) {
-				psock.setEncoding(this.encoding);
+				psock.setEncoding(_this.encoding);
 				var data = '';
 				var error = null;
 				psock.on('data', function (d) {
@@ -235,7 +324,7 @@ function FTP(settings) {
 		if (typeof dst == 'function') {
 			cb = dst; dst = null;
 		}
-		this.pasv(function (serr, psock) {
+		this.getDataSocket(function (serr, psock) {
 			if (psock) {
 				var error = null;
 				psock.setEncoding(_this.encoding);
@@ -245,10 +334,13 @@ function FTP(settings) {
 						error = err;
 					});
 
+					psock.on('readable', function () {
+
+					});
 
 					psock.on('data', function (d) {
 						if (!writeStream) {
-							writeStream = fs.createWriteStream(dst);
+							writeStream = fs.createWriteStream(dst, {encoding: _this.encoding});
 							writeStream.on("error", function (err) {
 								error = err;
 							});
@@ -292,27 +384,27 @@ function FTP(settings) {
 	this.put = function (src, dst, cb) {
 		var readStream;
 		if (src instanceof stream.Readable) readStream = src;
-		else readStream = fs.createReadStream(src);
+		else readStream = fs.createReadStream(src, {encoding: _this.encoding});
 
 		readStream.on('error', function (e) {
 			cb(e);
 			readStream.destroy();
 		});
 		readStream.on('readable', function () {
-			_this.pasv(function (serr, psock) {
+			_this.getDataSocket(function (serr, psock) {
 				if (psock) {
 					var error = null;
 					psock.setEncoding(_this.encoding);
 
 					psock.on('error', function (err) {
 						error = err;
+						readStream.end();
 					});
 
 					readStream.on('end', function () {
-						psock.end();
+						//psock.end();
 						readStream.close();
 						readStream.destroy();
-
 					});
 
 					psock.on('close', function () {
@@ -322,16 +414,17 @@ function FTP(settings) {
 						}
 					});
 
-					readStream.pipe(psock);
-
 					_this.raw('STOR',dst, function (res) {
 						if (res.substr(0, 3) == '550') {
 							if (cb) {
+								readStream.close();
+								psock.destroy();
 								cb(new Error(res));
 								cb = null;
 							}
-						} else if(!dst) {
-							cb(null, psock);
+						}
+						else {
+							readStream.pipe(psock);
 						}
 					});
 				}

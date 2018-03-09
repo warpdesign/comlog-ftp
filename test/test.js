@@ -1,6 +1,10 @@
-var client = new FTP({host: 'localhost', port: 21, user: 'anonymous', password: 'anonymous@'});
+var FTP = require('../');
+var client = new FTP({host: 'localhost', port: 21, user: 'anonymous', password: 'anonymous@', active: false});
 client.connect(function (err) {
 	console.info('connected');
+	client.get('file.txt', 'C:\\daten\\file.txt', function (err) {
+		console.info(err, 'done')
+	});
 });
 //client.on('ready', function () {
 //	console.info('Ready');
