@@ -347,23 +347,14 @@ function FTP(settings) {
 							cb_once(err);
 						});
 
-						/*psock.on('data', function (d) {
-							if (!writeStream) {
-								writeStream = fs.createWriteStream(dst, {encoding: _this.encoding});
-								writeStream.on("error", function (err) {
-									error = err;
-								});
-							}
-
-							writeStream.write(d);
-						});*/
-
 						psock.on('close', function () {
 							writeStream.end();
 						});
-						_this.once('226', function () {
-							cb_once(null);
+
+						_this.once('data', function (res) {
+							cb_once((res.substr(0, 3) != '226' ? new Error(res) : null), res);
 						});
+
 						psock.pipe(writeStream);
 					}
 				});
@@ -391,7 +382,6 @@ function FTP(settings) {
 		readStream.on('readable', function () {
 			_this.getDataSocket(function (serr, psock) {
 				if (psock) {
-					var error = null;
 					psock.setEncoding(_this.encoding);
 
 					psock.on('error', function (err) {
@@ -400,8 +390,8 @@ function FTP(settings) {
 					});
 
 					psock.on('close', function () {
-						_this.once('226', function (res) {
-							cb_once(error);
+						_this.once('data', function (res) {
+							cb_once((res.substr(0, 3) != '226' ? new Error(res) : null), res);
 						})
 					});
 

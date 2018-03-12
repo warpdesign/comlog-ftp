@@ -19,7 +19,7 @@ client.connect(function (err) {
 			});
 		}, 1000);
 	};
-	
+
 	put_file();
 });
 
