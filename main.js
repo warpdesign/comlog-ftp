@@ -52,7 +52,7 @@ function FTP(settings) {
 	this.DataSocket = null;
 
 	var _bindEvents = function () {
-		var eventList = ['connect', 'data', 'end', 'close', 'error'];
+		var eventList = ['connect', 'end', 'close', 'error'];
 		for(var i=0; i < eventList.length; i++) {
 			(function (e) {
 				_this.Socket.on(e, function () {
@@ -60,6 +60,17 @@ function FTP(settings) {
 				});
 			})(eventList[i]);
 		}
+
+		_this.Socket.on('data', function (chunk) {
+			var lines = chunk.split("\r\n");
+			while(lines.length > 0) {
+				if (line != '') {
+					var line = lines.shift();
+					_this.emit('data', line, arguments[1], arguments[2]);
+				}
+			}
+		});
+
 	};
 
 	/* Send user to FTP */
@@ -135,7 +146,9 @@ function FTP(settings) {
 	 */
 	this.write = function(cmd, cb) {
 		if (!cb) cb = function () {};
-		this.Socket.write(cmd + '\r\n', this.encoding, cb);
+		try {
+			this.Socket.write(cmd + '\r\n', this.encoding, cb);
+		} catch (e) { cb(e); }
 	};
 
 	/**
@@ -295,20 +308,35 @@ function FTP(settings) {
 			if (psock) {
 				psock.setEncoding(_this.encoding);
 				var data = '';
+				var msg = {};
 				psock.on('data', function (d) {
 					data += d;
 				});
 				psock.on('error', function (e) {
 					cb_once(e);
 				});
+
 				psock.on('close', function () {
-					_this.once('226', function () {
-						ListingParser.parseFtpEntries(data, function(parseErr, files) {
-							cb(parseErr, files, data);
-						});
+					if (_this.debug) console.info('close data socket');
+
+					// Fehlernachricht senden
+					if (!msg['226']) {
+						var m = '';
+						for(var i in msg) m += msg[i]+"\n";
+						//return cb_once(new Error(m))
+					}
+
+					ListingParser.parseFtpEntries(data, function(parseErr, files) {
+						cb_once(parseErr, files, data);
 					});
 				});
-				_this.write('LIST '+(dir || ''));
+
+				_this.write('LIST '+(dir || ''), function () {
+					_this.on('data', function (res) {
+						var code = res.substr(0, 3);
+						msg[code] = res;
+					});
+				});
 			}
 			else cb_once(serr);
 		});
@@ -507,10 +535,12 @@ function FTP(settings) {
 	/**
 	 * Close Connection and destroy
 	 */
-	this.destroy = function () {
-		this.Socket.close();
-		this.Socket.destroy();
-		this.Socket = null;
+	this.end = this.destroy = function () {
+		if (this.Socket) {
+			this.Socket.end();
+			this.Socket.destroy();
+			this.Socket = null;
+		}
 	};
 
 	// Einstellungen übernehmen
