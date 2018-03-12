@@ -62,7 +62,7 @@ function FTP(settings) {
 		}
 
 		_this.Socket.on('data', function (chunk) {
-			var lines = chunk.split("\r\n");
+			var lines = (chunk+'').trim().split("\r\n");
 			while(lines.length > 0) {
 				var line = lines.shift();
 				if (line.trim() !== '') {
