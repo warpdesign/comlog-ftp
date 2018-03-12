@@ -7,7 +7,7 @@ client.connect(function (err) {
 				console.info(err, 'done');
 				put_file();
 			});
-		}, 1000);
+		}, 500);
 	};
 
 	var put_file = function () {
@@ -17,7 +17,7 @@ client.connect(function (err) {
 				console.info(process.memoryUsage().heapUsed / 1024 / 1024);
 				get_file();
 			});
-		}, 1000);
+		}, 500);
 	};
 
 	put_file();
