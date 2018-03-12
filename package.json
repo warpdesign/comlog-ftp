@@ -1,6 +1,6 @@
 {
   "name": "comlog-ftp",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "FTP Client",
   "main": "main.js",
   "scripts": {
