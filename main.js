@@ -308,7 +308,24 @@ function FTP(settings) {
 			if (psock) {
 				psock.setEncoding(_this.encoding);
 				var data = '';
-				var msg = {};
+				var isDone = false;
+				var isClosed = false;
+				var _parse = function (err) {
+					if (isClosed && isDone) {
+						ListingParser.parseFtpEntries(data, function(parseErr, files) {
+							var errors = [];
+							if (err) errors.push(err.message);
+							if (parseErr) errors.push(parseErr.message);
+
+							cb_once(
+								errors.length > 0 ? new Error(errors.join("\r\n")) : null,
+								files,
+								data
+							);
+						});
+					}
+				};
+
 				psock.on('data', function (d) {
 					data += d;
 				});
@@ -318,23 +335,16 @@ function FTP(settings) {
 
 				psock.on('close', function () {
 					if (_this.debug) console.info('close data socket');
-
-					// Fehlernachricht senden
-					if (!msg['226']) {
-						var m = '';
-						for(var i in msg) m += msg[i]+"\n";
-						//return cb_once(new Error(m))
-					}
-
-					ListingParser.parseFtpEntries(data, function(parseErr, files) {
-						cb_once(parseErr, files, data);
-					});
+					isClosed = true;
+					_parse();
 				});
 
-				_this.write('LIST '+(dir || ''), function () {
-					_this.on('data', function (res) {
-						var code = res.substr(0, 3);
-						msg[code] = res;
+				_this.raw('LIST '+(dir || ''), function (res) {
+					if (res.substr(0, 3) != '150') return cb_once(new Error(res));
+					_this.once('data', function (res2) {
+						isDone = true;
+						if (res2.substr(0, 3) != '226') return _parse(new Error(res2));
+						_parse();
 					});
 				});
 			}
