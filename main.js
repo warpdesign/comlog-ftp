@@ -340,7 +340,7 @@ function FTP(settings) {
 				});
 
 				_this.raw('LIST '+(dir || ''), function (res) {
-					if (res.substr(0, 3) != '150') return cb_once(new Error(res));
+					if ((['125', '150']).indexOf(res.substr(0, 3)) == -1) return cb_once(new Error(res));
 					_this.once('data', function (res2) {
 						isDone = true;
 						if (res2.substr(0, 3) != '226') return _parse(new Error(res2));
