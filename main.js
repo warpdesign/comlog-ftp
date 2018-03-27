@@ -501,7 +501,7 @@ function FTP(settings) {
 	 */
 	this.delete = function (target, cb) {
 		this.raw('DELE', target, function (data) {
-			if (data.substr(0, 3) != '250') return cb(new Error(data));
+            if ((['250', '226']).indexOf(data.substr(0, 3)) == -1) return cb(new Error(data));
 			cb(null);
 		});
 	};
