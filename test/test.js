@@ -1,4 +1,5 @@
 var FTP = require('../');
+
 var client = new FTP({host: 'localhost', active: false, debug: true});
 client.connect(function (err) {
 	var get_file = function () {
@@ -23,6 +24,7 @@ client.connect(function (err) {
 	put_file();
 });
 
+/**/
 //client.on('ready', function () {
 //	console.info('Ready');
 /*	client.feat(function (data) {

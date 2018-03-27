@@ -92,6 +92,21 @@ conn.connect();
  - stat( callback ) void
  - destroy() void
 
+## Properties
+ - {int} port Default: 21
+ - {String} host Default: "localhost"
+ - {String} user Default: "anonymous"
+ - {String} password Default: "anonymous@"
+ - {boolean} active Default: false
+ - {int} timeout Default: 10 * 60 * 1000
+ - {String} encoding Default: 'binary'
+ - {String} type Default: 'I'
+ - {net.Socket} Socket Control channel socket. Default: null
+ - {boolean} debug Default: false
+
+## CHANGELOG
+ - BUG Encoding after Download
+
 ## License
 
 ISC © [COMLOG GmbH](http://www.comlog.org)

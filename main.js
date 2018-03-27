@@ -411,7 +411,7 @@ function FTP(settings) {
 		var cb_once = function (err, sock) { if (cb) { cb(err, sock); cb = null; } };
 		var readStream;
 		if (src instanceof stream.Readable) readStream = src;
-		else readStream = fs.createReadStream(src, {encoding: _this.encoding});
+		else readStream = fs.createReadStream(src);
 
 		readStream.on('error', function (e) {
 			cb_once(e);
