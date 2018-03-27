@@ -99,7 +99,7 @@ conn.connect();
  - {String} password Default: "anonymous@"
  - {boolean} active Default: false
  - {int} timeout Default: 10 * 60 * 1000
- - {String} encoding Default: 'binary'
+ - {String} encoding Default: 'binary' Available: ascii,utf8,utf16le,ucs2,base64,latin1,binary,hex
  - {String} type Default: 'I'
  - {net.Socket} Socket Control channel socket. Default: null
  - {boolean} debug Default: false
