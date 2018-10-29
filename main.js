@@ -427,6 +427,10 @@ function FTP(settings) {
 						cb_once(err);
 					});
 
+					psock.on('pipe', function (rs) {
+						this.write(rs.read());
+					});
+
 					psock.on('close', function () {
 						_this.once('data', function (res) {
 							cb_once((res.substr(0, 3) != '226' ? new Error(res) : null), res);
