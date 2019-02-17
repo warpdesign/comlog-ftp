@@ -81,8 +81,8 @@ conn.connect();
  - raw( command, [args], callback ) void
  - feat( callback ) void
  - list( callback ) void
- - get( removeFilePath, [localFilePath], callback ) void
- - put( localFilePath, [removeFilePath], callback ) void
+ - get( remoteFilePath, [localFilePath], callback ) void
+ - put( localFilePath, [remoteFilePath], callback ) void
  - cwd( remotePath, callback ) void
  - pwd( callback ) void
  - rename( remoteFromPath, remoteToPath, callback) void
